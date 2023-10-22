@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Quiz</title>
+    <!-- Inclure Bootstrap CSS -->
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <style>
+        /* Vos styles existants */
+        body {
+        background-color: #f8f9fa; /* Couleur de fond légère pour tout le body, c'est doux pour les yeux */
+    }
+
+    .container {
+        background-color: #ffffff; /* Un fond blanc pour le conteneur principal pour faire ressortir le contenu */
+        border-radius: 5px; /* Coins arrondis pour le conteneur */
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1); /* Ombre légère pour un peu de profondeur */
+        padding: 20px; /* Espace autour du contenu dans le conteneur */
+        margin-top: 50px; /* Espace supplémentaire en haut pour éviter que le contenu ne colle à la barre de navigation */
+    }
+
+    .question {
+        font-size: 1.5em; /* Rendre la question un peu plus grande */
+        margin-bottom: 15px; /* Espace supplémentaire sous la question */
+    }
+
+    .answer {
+        background-color: #e9ecef; /* Une couleur de fond pour distinguer visuellement les options de réponse */
+        border-radius: 5px; /* Coins arrondis pour les options de réponse */
+        padding: 10px; /* Espace autour du texte de réponse */
+        margin-bottom: 10px; /* Espace entre les options de réponse */
+        cursor: pointer; /* Change le curseur sur les réponses pour indiquer qu'elles sont cliquables */
+        transition: background-color 0.3s; /* Transition en douceur pour les interactions */
+    }
+
+    .answer:hover {
+        background-color: #dee2e6; /* Changez la couleur de fond lorsque vous survolez une réponse */
+    }
+
+    .player-button {
+        /* Vos styles existants, et vous pouvez ajouter une transition pour les changements d'état */
+        transition: all 0.3s;
+        padding: 15px 30px; /* Augmente le remplissage pour des boutons plus grands */
+        font-size: 20px; /* Augmente la taille de la police pour une meilleure visibilité */
+        margin: 0 10px; /* Espace optionnel entre les boutons si vous voulez qu'ils ne soient pas collés les uns aux autres */
+        border-radius: 5px;
+    }
+
+    .player-button.selected {
+        background-color: #FF69B4; /* Utilisation d'une couleur Bootstrap standard pour l'état sélectionné */
+        color: white;
+        border-color: #FF69B4;
+    }
+
+    .player-button:hover {
+        background-color: #FF69B4; /* Couleur plus foncée pour l'état de survol */
+        border-color: #FF69B4;
+    }
+
+    .bottom-answer h3 {
+        color: #28a745; /* Un vert agréable pour indiquer la "bonne réponse" */
+        margin-top: 20px; /* Espace supplémentaire au-dessus de la "bonne réponse" */
+    }
+    .footer-players {
+        position: fixed; /* Fixe la position par rapport à l'écran */
+        bottom: 0; /* Assure que c'est toujours en bas de la page */
+        left: 0; /* Aligné à gauche */
+        width: 100%; /* Pleine largeur */
+        text-align: center; /* Centre le contenu horizontalement */
+        padding: 20px; /* Donne un peu d'espace autour des boutons */
+        background-color: rgba(255, 255, 255, 0.9); /* Un fond blanc légèrement transparent */
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1); /* Une légère ombre pour la séparation */
+    }
+    .countdown-container {
+        margin: 20px 0; /* ajouter de l'espace autour du compte à rebours */
+    }
+
+    .player-button {
+        /* vos styles existants pour les boutons */
+        margin: 0 5px; /* Espace entre les boutons */
+        /* autres styles que vous souhaitez conserver ou ajouter */
+    }
+    #countdown-wrapper {
+    text-align: center; /* Cela centre tous les éléments en ligne à l'intérieur */
+    width: 100%; /* s'assure qu'il prend toute la largeur disponible */
+    /* Ajoutez d'autres styles si nécessaire, comme le padding ou la marge, selon votre design */
+}
+    #countdown-display {
+    text-align: center; /* Centrer le texte */
+    padding: 10px; /* Espace autour du texte */
+    background-color: #f8d7da; /* Couleur de fond, peut-être un rouge pâle */
+    color: #721c24; /* Couleur du texte, peut-être un rouge foncé */
+    border-radius: 10px; /* Coins arrondis */
+    display: inline-block; /* Cela permet de s'assurer que la div n'occupe que l'espace nécessaire */
+    margin: 20px 0; /* Espace au-dessus et en dessous du compteur */
+    display: none;
+}
+
+    
+    </style>
+    <!-- Inclure jQuery (version complète, pas "slim") pour AJAX -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script>
+        // Déclaration de variables
+        var previousQuestions = [];
+        var currentQuestion = null;
+        var questionCount = 0;
+        var countdown; // Pour stocker l'identifiant du compte à rebours
+        var countdownNumber; // Pour stocker le temps restant du compte à rebours
+        var selectedPlayerId = null; // Pour stocker le joueur sélectionné
+        const TOTAL_QUESTIONS = 5; // ou tout autre limite de votre choix
+    
+        $(document).ready(function () {
+            function loadNewQuestion() {
+                // Vérifier si nous avons atteint la limite de questions
+                if (questionCount >= TOTAL_QUESTIONS) {
+                    window.location.href = '{% url "end_quiz" %}'; // Rediriger vers la page de fin de quiz
+                    return;
+                }
+                if (countdown) {
+                    clearInterval(countdown);
+                    countdown = null;  // Réinitialiser la variable de compte à rebours
+                    startCountdown(5);
+                }
+                $('#countdown-display').hide(); // Cachez le compte à rebours lorsque vous chargez une nouvelle question
+    
+                $.ajax({
+                    url: '{% url "ajax_random_question" %}',
+                    method: 'GET',
+                    success: function (data) {
+                        if (currentQuestion) {
+                            previousQuestions.push(currentQuestion);
+                        }
+    
+                        currentQuestion = data;
+                        questionCount++; // Mise à jour du compteur de questions
+    
+                        $('.question').text(data.question_text);
+                        $('.answer').remove();
+    
+                        // Ajout des nouvelles réponses
+                        data.choices.forEach(function (choice, index) {
+                            var newChoice = $('<div class="answer"></div>').text(choice.choice_text);
+                            if (index % 2 === 0) {
+                                $('#column-left').append(newChoice);
+                            } else {
+                                $('#column-right').append(newChoice);
+                            }
+                        });
+    
+                        // Indiquer la bonne réponse
+                        var correct = data.choices.find(function (choice) {
+                            return choice.is_correct;
+                        });
+                        $('.bottom-answer h3').text("Bonne réponse: " + (correct ? correct.choice_text : ''));
+    
+                        // Réinitialisation de la sélection du joueur après le chargement d'une nouvelle question
+                        $('.player-button').removeClass('selected');
+                        selectedPlayerId = null; // Assurez-vous que cela ne rompt pas la logique de votre jeu
+                    },
+                    error: function (error) {
+                        console.log("Une erreur est survenue lors de la récupération d'une nouvelle question", error);
+                    }
+                });
+            }
+    
+            // Initialiser la première question
+            loadNewQuestion();
+    
+            // Gérer la sélection des joueurs
+            $('.player-button').click(function() {
+                // Si un joueur était déjà sélectionné, on ne fait rien
+                
+                $('.player-button').removeClass('selected');
+                $(this).addClass('selected');
+                selectedPlayerId = $(this).data('player-id');
+
+                // Commencer le compte à rebours dès qu'un joueur est sélectionné
+                $('#countdown-display').show();
+                startCountdown(5); // 5 secondes de compte à rebours
+            });
+    
+            // Gérer le clic sur le bouton "Question précédente"
+            $(".question-prec").click(function () {
+                // Votre logique existante pour revenir à la question précédente
+            });
+
+            function startCountdown(seconds) {
+                countdownNumber = seconds;
+                // Afficher le compte à rebours (vous devez ajouter un élément dans votre HTML pour cela)
+                displayCountdown(countdownNumber);
+
+                // Arrêter tout compte à rebours précédent
+                if (countdown) {
+                    clearInterval(countdown);
+                }
+
+                // Commencer le décompte
+                countdown = setInterval(function() {
+                    countdownNumber--;
+                    displayCountdown(countdownNumber);
+
+                    if (countdownNumber <= 0) {
+                        clearInterval(countdown);
+                        // Ici, vous pouvez gérer ce qui se passe si le temps s'épuise, comme passer au prochain joueur
+                        // ou montrer un message, etc.
+                        timeOutHandler();
+                    }
+                }, 1000); // mise à jour chaque seconde
+            }
+
+            // Cette fonction met à jour l'affichage du compte à rebours sur votre page Web.
+            function displayCountdown(seconds) {
+                // Vous devriez avoir un élément dans votre HTML où cette valeur sera affichée, par exemple :
+                // <div id="countdown-display"></div>
+                $('#countdown-display').text(seconds); // met à jour le texte dans l'élément d'affichage du compte à rebours
+            }
+
+            function timeOutHandler() {
+                $('#countdown-display').hide();
+                // Cette fonction pourrait gérer ce qui doit se passer lorsque le temps est écoulé.
+                // Par exemple, vous pouvez dé-sélectionner le joueur actuel et afficher un message, etc.
+                alert("Trop tard mec! Passss");
+                $('.player-button').removeClass('selected');
+                selectedPlayerId = null; // Réinitialiser le joueur sélectionné
+                // Ajoutez ici toute autre logique que vous jugez nécessaire lorsque le temps s'épuise.
+            }
+    
+            // Gérer le clic sur le bouton "Question suivante"
+            $(".change-question").click(function () {
+                // Arrêter le compte à rebours actuel s'il est actif
+                if (countdown) {
+                    clearInterval(countdown);
+                    countdown = null;  // Réinitialiser la variable de compte à rebours
+                }
+                // Si un joueur est sélectionné, mettre à jour le score, sinon afficher une alerte
+                if (selectedPlayerId) {
+                    $.ajax({
+                        url: '{% url "update_score" %}',
+                        method: 'POST',
+                        data: {
+                            player_id: selectedPlayerId,
+                            csrfmiddlewaretoken: '{{ csrf_token }}'
+                        },
+                        success: function () {
+                            loadNewQuestion(); // Charger la nouvelle question après la mise à jour du score
+                        },
+                        error: function (error) {
+                            console.log("Erreur lors de la mise à jour du score: ", error);
+                        }
+                    });
+                } else {
+                    alert("Aucun joueur sélectionné!");
+                }
+            });
+        });
+    </script>
+    
+    
+</head>
+<body>
+    <div class="container mt-5">
+        <h2 class="question"></h2>
+
+        <!-- Utiliser une grille Bootstrap pour les réponses -->
+        <div class="row">
+            <div class="col-md-6" id="column-left"></div>
+            <div class="col-md-6" id="column-right"></div>
+        </div>
+
+        <!-- Indiquer la bonne réponse en bas -->
+        <div class="bottom-answer">
+            <h3></h3>
+        </div>
+        
+        <!-- Les boutons pour changer de question -->
+         <!-- Ce bouton pourrait être configuré plus tard pour charger la question précédente si nécessaire -->
+        <button class="btn btn-primary mt-4 change-question">Question suivante</button>
+
+    </div>
+
+    <div id="countdown-wrapper">
+        <div id="countdown-display">5</div>
+    </div>
+    
+
+    
+
+    <!-- Nouvelle section pour les boutons des joueurs -->
+    <div class="footer-players">
+        <div class="players-section">
+            {% for player in players %}
+            <button type="button" class="btn btn-secondary player-button" data-player-id="{{ player.id }}">{{ player.name }}</button>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Inclure Bootstrap JS et jQuery si nécessaire -->
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.3/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+</body>
+</html>

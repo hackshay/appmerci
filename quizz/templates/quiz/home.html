@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Accueil du Quiz</title>
+</head>
+<body>
+    <h1>Bienvenue dans le Quiz</h1>
+    
+    <h2>Ajouter des joueurs :</h2>
+    <form method="post">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <button type="submit">Ajouter</button>
+    </form>
+    
+    <h2>Liste des joueurs :</h2>
+    <ul>
+        {% for player in players %}
+            <li>
+                {{ player.name }}
+                <button type="button" class="delete-player" data-player-id="{{ player.id }}">Supprimer</button>
+            </li>
+        {% endfor %}
+    </ul>
+    
+    {% if players|length >= 2 %}
+    <h2>Sélectionner l'animateur :</h2>
+    <p>Cliquez sur le bouton ci-dessous pour sélectionner au hasard l'animateur parmi les joueurs.</p>
+    <form method="post" action="{% url 'home' %}">
+        {% csrf_token %}
+        <button type="submit" id="selectAnimatorButton">Sélectionner l'animateur</button>
+    </form>
+    <div id="selectedAnimator">
+        L'animateur sélectionné est : <span id="animatorName"></span>
+    </div>
+    {% endif %}
+    
+    <a href="{% url 'quizz' %}">Commencer le quiz</a>
+
+    <script>
+        // JavaScript pour gérer la suppression de joueur
+        document.querySelectorAll('.delete-player').forEach(function(button) {
+            button.addEventListener('click', function() {
+                const playerId = this.getAttribute('data-player-id');
+
+                // Confirmez la suppression avec une boîte de dialogue
+                const confirmDelete = confirm('Voulez-vous vraiment supprimer ce joueur ?');
+
+                if (confirmDelete) {
+                    // Utilisation de FormData pour envoyer l'ID du joueur
+                    let formData = new FormData();
+                    formData.append('player_id', playerId);
+
+                    fetch('/delete_player/', {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRFToken': '{{ csrf_token }}'
+                        },
+                        body: formData
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.message) {
+                            // Rechargez la page pour mettre à jour la liste des joueurs
+                            window.location.reload();
+                        } else {
+                            alert(data.error);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Erreur lors de la requête AJAX :', error);
+                    });
+                }
+            });
+        });
+
+            // JavaScript pour gérer la sélection de l'animateur
+        document.getElementById('selectAnimatorButton').addEventListener('click', function(event) {
+            event.preventDefault();
+
+            fetch('{% url 'home' %}', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ action: 'select_animator' })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.animator_name) {
+                    document.getElementById('animatorName').textContent = data.animator_name;
+
+                    // Nouveau code : trouver l'élément de la liste (li) contenant le nom de l'animateur et le supprimer.
+                    let playerListItems = document.querySelectorAll('ul li');
+                    playerListItems.forEach(function(item) {
+                        if (item.textContent.includes(data.animator_name)) {
+                            item.remove();  // Supprime l'élément de la liste
+                        }
+                    });
+                } else {
+                    console.error('Erreur lors de la sélection de l\'animateur :', data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Erreur lors de la requête AJAX :', error);
+            });
+        });
+    </script>
+</body>
+</html>
+
