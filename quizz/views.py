@@ -1,6 +1,6 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from random import choice
-from .models import Question, Choice, Player, Animator
+from .models import Question, Choice, Player, Animator, GameSession
 from .forms import PlayerForm
 from django.views.decorators.csrf import csrf_exempt
 import random
@@ -12,16 +12,34 @@ from django.http import JsonResponse, HttpResponseBadRequest
 
 @csrf_exempt  # Notez que désactiver CSRF n'est pas recommandé, mais cela semble être votre configuration actuelle.
 def home(request):
-    players = Player.objects.all()  # Assurez-vous d'importer le modèle Player
-    form = PlayerForm()  # Et aussi d'importer PlayerForm
+    # Récupérer la clé de session de jeu depuis la session du navigateur
+    game_session_key = request.session.get('game_session_key')
 
+    # Si aucune session de jeu n'est en cours, redirigez peut-être l'utilisateur ou gérez ce scénario.
+    if game_session_key is None:
+        # Gérer l'absence de session de jeu (par exemple, rediriger vers la page de démarrage)
+        return redirect('start_session')  # Remplacez par votre propre logique si nécessaire
+
+    # Récupérer l'objet GameSession en utilisant la clé de session de jeu.
+    try:
+        game_session = GameSession.objects.get(session_key=game_session_key)
+    except GameSession.DoesNotExist:
+        # Gérer le cas où la session de jeu n'existe pas.
+        # Peut-être rediriger vers la page de démarrage ou afficher un message d'erreur.
+        return redirect('start_session')  # Remplacez par votre propre logique si nécessaire
+
+    # Récupérer tous les joueurs appartenant à cette session de jeu.
+    players = Player.objects.filter(game_session=game_session)
+
+    # Logique existante pour gérer les requêtes POST
     if request.method == 'POST':
         try:
             content = json.loads(request.body)
 
             # Si c'est une requête pour sélectionner un animateur
             if 'action' in content and content['action'] == 'select_animator':
-                players = list(Player.objects.all())
+                # Assurez-vous de filtrer les joueurs par game_session ici aussi
+                players = list(players)  # déjà filtré pour la session actuelle au-dessus
                 if len(players) >= 2:
                     # Sélectionner un joueur au hasard pour devenir animateur
                     player_to_become_animator = random.choice(players)
@@ -41,16 +59,19 @@ def home(request):
                     return HttpResponseBadRequest("Pas assez de joueurs.")
 
         except json.JSONDecodeError:
-            # Si ce n'est pas une requête JSON, alors c'est un POST de formulaire
+            # Si ce n'est pas une requête JSON, alors c'est un POST de formulaire standard
             form = PlayerForm(request.POST)
             if form.is_valid():
-                form.save()
-                return redirect('home')  # Ceci redirige vers la vue 'home', changer selon votre URL
+                new_player = form.save(commit=False)
+                new_player.game_session = game_session  # Assurez-vous que le joueur est lié à la session de jeu
+                new_player.save()
+                return redirect('home')  # Ceci redirige vers la vue 'home'
 
-    # Si ce n'est pas une requête POST ou si rien n'a correspondu, affichez la page normalement.
+    # Si ce n'est pas une requête POST, ou si le formulaire n'est pas valide, affichez la page normalement avec les joueurs de la session actuelle
+    form = PlayerForm()  # un nouveau formulaire vide pour la présentation
     context = {
         'form': form,
-        'players': Player.objects.all(),  # Ceci récupère tous les joueurs restants
+        'players': players,  # joueurs déjà filtrés pour la session actuelle
     }
     return render(request, 'quiz/home.html', context)
 
@@ -73,16 +94,30 @@ def delete_player(request):
 
     return JsonResponse({'error': 'Méthode non autorisée'}, status=405)
 
-
 def show_question(request):
-    players = Player.objects.all()  # Récupère tous les joueurs
+    # Récupérer la clé de session de jeu depuis la session du navigateur
+    game_session_key = request.session.get('game_session_key')
+
+    # Si aucune session de jeu n'est en cours, vous pourriez rediriger l'utilisateur ou gérer cela autrement
+    if game_session_key is None:
+        # Gérer l'absence de session de jeu (par exemple, rediriger vers la page de démarrage)
+        return redirect('start_session')  # Remplacez par votre propre logique si nécessaire
+
+    # Récupérer l'objet GameSession en utilisant la clé de session de jeu.
+    try:
+        game_session = GameSession.objects.get(session_key=game_session_key)
+    except GameSession.DoesNotExist:
+        # Gérer le cas où la session de jeu n'existe pas.
+        return redirect('start_session')  # Remplacez par votre propre logique si nécessaire
+
+    # Récupérer tous les joueurs appartenant à cette session de jeu.
+    players = Player.objects.filter(game_session=game_session)
+
     questions = Question.objects.all()
 
     if not questions:
-        # Si aucune question n'est disponible, rediriger ou informer l'utilisateur en conséquence
-        return render(request, 'quiz/no_questions.html')  # Assurez-vous de créer ce template.
+        return render(request, 'quiz/no_questions.html')  # ou toute autre gestion en cas d'absence de questions
 
-    # Si nous avons des questions, sélectionnez-en une au hasard
     question = random.choice(questions)
     choices = question.choice_set.all()
 
@@ -93,24 +128,18 @@ def show_question(request):
             break
 
     if request.method == 'POST':
-        
-        # L'animateur a sélectionné le joueur qui a donné la bonne réponse
-        player_id = request.POST.get('player_id')  # Obtenir l'ID du joueur sélectionné par l'animateur
-
-        if player_id:  # Assurez-vous qu'un ID de joueur a été reçu
+        player_id = request.POST.get('player_id')
+        if player_id:
             selected_player = get_object_or_404(Player, pk=player_id)
-            selected_player.score += 1  # Augmentation du score car l'animateur a indiqué que ce joueur a bien répondu
+            selected_player.score += 1  # Incrémenter le score
             selected_player.save()
+            return redirect('quizz')  # Assurez-vous que c'est le nom correct dans vos URL patterns
 
-            # Après avoir mis à jour le score, vous pouvez rediriger vers la même vue pour charger une nouvelle question
-            return redirect('show_question')  # 'show_question' devrait être le nom de cette vue dans vos URL.
-
-    # Si ce n'est pas un POST ou si aucune sélection n'a été faite, affichez simplement la question et les options
     context = {
         'question': question,
         'choices': choices,
-        'correct_choice': correct_choice,  # Ajoutez ceci si vous souhaitez l'utiliser dans votre template
-        'players': players,
+        'correct_choice': correct_choice,  # Si vous souhaitez afficher ou utiliser le choix correct dans le template
+        'players': players,  # Joueurs spécifiques à la session actuelle
     }
     return render(request, 'quiz/questions.html', context)
 
@@ -169,8 +198,16 @@ def update_score(request):
     return JsonResponse({'error': 'Bad request'}, status=400)
 
 def end_quiz(request):
+    game_session_key=request.session.get('game_session_key')
+
+    if game_session_key is None:
+        return redirect('start_session')
+    try:
+        game_session=GameSession.objects.get(session_key=game_session_key)
+    except GameSession.DoesNotExist:
+        return redirect('start_session')
     # Récupérer tous les joueurs et leurs scores
-    players = Player.objects.all().order_by('-score')
+    players = Player.objects.filter(game_session=game_session).order_by('-score')
 
     # Préparer les données pour l'affichage
     context = {
@@ -181,5 +218,19 @@ def end_quiz(request):
     return render(request, 'quiz/end_quiz.html', context)
 
 def start_session(request):
-    request.session.create()
+    if request.method == 'POST':  # supposer que la demande de démarrage de session est un POST
+        new_game = GameSession()
+        new_game.save()
+
+        # Vous pouvez également ajouter l'animateur à la session ici si nécessaire
+        print("New GameSession created with session_key:", new_game.session_key)
+        # Rediriger l'utilisateur vers la page du jeu avec la clé de session
+
+        # Convertir l'UUID en chaîne avant de le stocker
+        session_key_str = str(new_game.session_key)  # Assurez-vous que session_key est l'UUID
+        request.session['game_session_key'] = session_key_str
+        # ou stocker la clé de session dans la session du navigateur.
+        return redirect('home')  # remplacez 'game_view' par le nom de la vue de votre jeu
+
+    # Si la méthode est GET, nous affichons simplement la page avec le formulaire de démarrage
     return render(request, 'quiz/start_session.html')

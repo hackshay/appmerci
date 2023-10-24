@@ -4,17 +4,17 @@
     <meta charset="UTF-8">
     <title>Accueil</title>
     <style>
-        /* CSS simple pour le style du bouton, le centrer et le positionner */
+        /* Vos styles existants */
         body {
             display: flex;
             justify-content: center;
             align-items: center;
-            height: 100vh; /* Prendre la hauteur de la fenêtre de visualisation */
+            height: 100vh;
             margin: 0;
         }
         .center-div {
             position: absolute;
-            bottom: 50px; /* Position depuis le bas de la page */
+            bottom: 50px;
         }
         .start-button {
             font-size: 20px;
@@ -26,8 +26,11 @@
 <body>
 
 <div class="center-div">
-    <!-- Lorsque vous cliquez sur ce bouton, vous êtes redirigé vers "/start_session/" -->
-    <a href="/home/" class="start-button">Démarrer</a>
+    <!-- Utilisation d'un formulaire pour démarrer la session -->
+    <form method="POST" action=""> <!-- assurez-vous que l'URL est correcte -->
+        {% csrf_token %}
+        <input type="submit" value="Démarrer" class="start-button" />
+    </form>
 </div>
 
 </body>
